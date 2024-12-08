@@ -1,13 +1,13 @@
 # Group 2 #
 .data
-displayBuffer:  .space 0x80000 # space for 512x256 bitmap display 
-errorBuffer:    .space 0x80000 # space to store match function
+displayBuffer:  .space 0x40000 # space for 512x128 bitmap display 
+errorBuffer:    .space 0x40000 # space to store match function
 templateBuffer: .space 0x100   # space for 8x8 template
 imageFileName:    .asciiz "pxlcon512x256cropgs.raw" 
 templateFileName: .asciiz "template8x8gsLRtest.raw"
 # struct bufferInfo { int *buffer, int width, int height, char* filename }
-imageBufferInfo:    .word displayBuffer  512 256  imageFileName
-errorBufferInfo:    .word errorBuffer    512 256  0
+imageBufferInfo:    .word displayBuffer  512 128  imageFileName
+errorBufferInfo:    .word errorBuffer    512 128  0
 templateBufferInfo: .word templateBuffer 8   8    templateFileName
 
 
@@ -19,8 +19,8 @@ main:	la $a0, imageBufferInfo #load the image struct into $a0
 	la $a0, imageBufferInfo #load the image struct into $a0
 	la $a1, templateBufferInfo #load the template struct into $a1
 	la $a2, errorBufferInfo #load the error struct into $a1
-	jal matchTemplate        # MATCHING DONE HERE
-	#jal matchTemplateFast
+	#jal matchTemplate        # MATCHING DONE HERE
+	jal matchTemplateFast
 	la $a0, errorBufferInfo # after match template is complete, the error buffer will be full
 				# of the errors of each 8x8 section of the image compared with the 
 				#8x8 template, we load this buffer into the find best function
