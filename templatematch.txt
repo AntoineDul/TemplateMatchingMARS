@@ -11,6 +11,24 @@ errorBufferInfo:    .word errorBuffer    512 128  0
 templateBufferInfo: .word templateBuffer 8   8    templateFileName
 
 
+# QUESTIONS 
+
+# Question 1 : Do the base addresses of image and error buffers fall into the same block of the direct mapped cache?
+# For the direct mapped cache in the data cache simulator, we have tested with 8 blocks each of size 4 words and 
+# with a cache size of 128 bytes. Each block contains therefore 16 bytes and we have a total of 8 blocks (128/16).
+# Hence, we have 4 bits for the offset and 3 bits for the index. Moreover, the error buffer address is 0x40000 bytes
+# after the display buffer in memory. 0x40000 (hexadecimal) = 0100 0000 0000 0000 0000 (binary). We notice that the 
+# 3 bits mapping to the index block will not be changed by adding 0x40000 to the base address of the display buffer.
+# So they both map to the same block in cache memory. 
+
+# Question 2 : For the templateMatchFast and a direct mapped cache, does it matter if the template buffer base address
+# falls into the same block as the image or error buffer base address?
+# Yes it does matter because these addresses are accessed at every iteration of the loops. Hence if they are mapped to
+# the same block, we will see a "ping-pong effect" where every time we will be looking for data in this block we will
+# have a miss and will have to load the data from memory erasing the data currently in the block (which we will need 
+# next iteration). This would greatly impact the performance of our program.
+#
+
 .text
 main:	la $a0, imageBufferInfo #load the image struct into $a0
 	jal loadImage 
@@ -19,8 +37,8 @@ main:	la $a0, imageBufferInfo #load the image struct into $a0
 	la $a0, imageBufferInfo #load the image struct into $a0
 	la $a1, templateBufferInfo #load the template struct into $a1
 	la $a2, errorBufferInfo #load the error struct into $a1
-	#jal matchTemplate        # MATCHING DONE HERE
-	jal matchTemplateFast
+	jal matchTemplate        # MATCHING DONE HERE
+	#jal matchTemplateFast
 	la $a0, errorBufferInfo # after match template is complete, the error buffer will be full
 				# of the errors of each 8x8 section of the image compared with the 
 				#8x8 template, we load this buffer into the find best function
