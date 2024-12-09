@@ -1,6 +1,7 @@
 # Group 2 #
 .data
 displayBuffer:  .space 0x40000 # space for 512x128 bitmap display 
+cacheOptimizationOffset: .space 0x50
 errorBuffer:    .space 0x40000 # space to store match function
 templateBuffer: .space 0x100   # space for 8x8 template
 imageFileName:    .asciiz "pxlcon512x256cropgs.raw" 
@@ -14,20 +15,28 @@ templateBufferInfo: .word templateBuffer 8   8    templateFileName
 # QUESTIONS 
 
 # Question 1 : Do the base addresses of image and error buffers fall into the same block of the direct mapped cache?
-# For the direct mapped cache in the data cache simulator, we have tested with 8 blocks each of size 4 words and 
-# with a cache size of 128 bytes. Each block contains therefore 16 bytes and we have a total of 8 blocks (128/16).
-# Hence, we have 4 bits for the offset and 3 bits for the index. Moreover, the error buffer address is 0x40000 bytes
-# after the display buffer in memory. 0x40000 (hexadecimal) = 0100 0000 0000 0000 0000 (binary). We notice that the 
-# 3 bits mapping to the index block will not be changed by adding 0x40000 to the base address of the display buffer.
-# So they both map to the same block in cache memory. 
+# 
+# Answer: In this project we use a direct mapped cache with 8 blocks which can each hold 4 words (2^4 bytes). As
+# seen in the lecture slides to find the index of a cache with 8, 4 word blocks, we look at the first 7 bits of the address,
+# the first 4 bits tell us the offset within a given block, while the 3 bits to the left of those bits tell us the index
+# or which block the memory is stored in. Applying this to the image and error buffer base addresses we gain the following
+# insight: the image buffer base address is stored at 0x10010000, while the error buffer base address is stored at
+# 0x10050000 (0x40000 bytes later), looking at the first 7 bits of the image buffer address we see 000 0000, indicating
+# that the image buffer base address is stored in the first block (or 0th block), similarly looking at the first 7 bits
+# of the error buffer address we see 000 0000 which indicates that the error buffer base address is also stored in the first
+# block (or 0th block) in the cache. To fix this, we can add an offset to the error buffer base address to make sure
+# that it does not fall into the same block of the direct mapped cache. This can be done using .space to create a sort of
+# "padding" to force the error buffer base address into a different block. Note: I have added this "padding" after the
+# allocation of space for the display buffer. This simple change improves the cache hit rate by nearly 10%! 
 
 # Question 2 : For the templateMatchFast and a direct mapped cache, does it matter if the template buffer base address
 # falls into the same block as the image or error buffer base address?
-# Yes it does matter because these addresses are accessed at every iteration of the loops. Hence if they are mapped to
-# the same block, we will see a "ping-pong effect" where every time we will be looking for data in this block we will
-# have a miss and will have to load the data from memory erasing the data currently in the block (which we will need 
-# next iteration). This would greatly impact the performance of our program.
-#
+# 
+# Answer: It does not matter if the template buffer base address falls into the same block as the image or error buffer
+# base addresses because we have loaded the data stored in the template buffer adresses prior to the inner loop into temporary
+# registers. Having done this removes the need to repeatedly load data from the template buffer inside the inner loop where we
+# also load data from the image and error buffers. Instead we are able to subtract the prestored values in the registers
+# $t0 -> t7 without needed to load from the template buffer which could have caused cache misses.
 
 .text
 main:	la $a0, imageBufferInfo #load the image struct into $a0
@@ -37,8 +46,13 @@ main:	la $a0, imageBufferInfo #load the image struct into $a0
 	la $a0, imageBufferInfo #load the image struct into $a0
 	la $a1, templateBufferInfo #load the template struct into $a1
 	la $a2, errorBufferInfo #load the error struct into $a1
-	jal matchTemplate        # MATCHING DONE HERE
-	#jal matchTemplateFast
+	
+	#comment the matching algorithm that you do not want to use and uncomment the one you want to use
+	
+	#jal matchTemplate        # MATCHING DONE HERE
+	jal matchTemplateFast
+	
+	
 	la $a0, errorBufferInfo # after match template is complete, the error buffer will be full
 				# of the errors of each 8x8 section of the image compared with the 
 				#8x8 template, we load this buffer into the find best function
@@ -78,15 +92,15 @@ matchTemplate:
     	
 	
 	lw $t0 0($a0) # load address of displayBuffer (0x10010000) into $t0
-	lw $t1 4($a0) # load width of image (512) into $t1
-	lw $t2 8($a0) # load height of image (128) into $t2 
+	lw $t1 4($a0) # load width of image into $t1
+	lw $t2 8($a0) # load height of image into $t2 
 	lw $t3, 0($a1) # load base address of template buffer
 	lw $t4, 0($a2) # load base address of error buffer
 
 	add $t5, $zero, $zero # $t5 = y iterator
 	
-	subi $s6, $t2, 7	# acceprable for convention? # need to stop 7 columns early because our pointer is in the "top left"
-	subi $s7, $t1, 7	#acceptable for convention?  # need to stop 7 rows early because our pointer is in the "top left"
+	subi $s6, $t2, 7	# need to stop 7 columns early because our pointer is in the "top left"
+	subi $s7, $t1, 7	# need to stop 7 rows early because our pointer is in the "top left"
 	
 y_loop:
 	bge $t5, $s6, end_y_loop 
